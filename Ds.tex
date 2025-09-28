@@ -102,7 +102,7 @@ But these executions do not account for time, so we may have executions that are
 In the asynch. model there is no distributed algorithm capable of reconstructing the system execution.
 \end{thm}
 
-\subsection{section}{Synchronous Vs Asynchronous}
+\subsection{Synchronous Vs Asynchronous}
 We have 3 main types of synchrony:
 \begin{itemize}
     \item Asynchronous Systems
@@ -111,4 +111,16 @@ We have 3 main types of synchrony:
 \end{itemize}
 We can say that is a system is synchronous if it has a fixed bound on the daly of messages, on the time of actions executed by processes, and a fixed bound between execution of actions.
 \subsection{Failures}
+We have 2 main models for failures:\\
+\begin{itemize}
+    \item Crash-stop Failures (The program crashes, and doesnt respond)
+    \item Byzantine Failures (The behaviour of the program is random)
+\end{itemize}
+We signal crash failures with a star sign and byzantile failures with a !
+\begin{center}
+    \includegraphics[scale=0.6]{img/crash.png}\\
+    \includegraphics[scale=0.6]{img/byz.png}
+\end{center}
+Byzantine failures are a superset of Crashstop failures, so algorithms that will work on byzantine failures will always work on crash stop failures, but not the contrary.\\
+A process is \textbf{correct} if it does not experience a failure, every algorithm has a maximum number f of failures that i can experience.
 \end{document}
