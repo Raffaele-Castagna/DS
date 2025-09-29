@@ -138,8 +138,10 @@ Inside a link we have two main eents:
 Now let us formalize this further via its properties:
 \begin{itemize}
     \item \textbf{FL1}: (Fair loss) If a correct process p sends infinetely often m, a process q then delivers m an infinite number of times. (e.g. suppose we have $\frac{1}{2}$ probability and we send it over 10 times, then the probability will be $1 - \frac{1}{2^{10}}$ as events are independentm aka if we try hard enough we get the message)
+    \item \textbf{FL2}: (Finite duplication) if a correct process p send m a finite number of times to q, then q cannot deliver m an infinite number of times (wel'll receive a finite number of duplicated packets)
+    \item \textbf{FL3}: (No creation) If a certain process q sends a message m with send(p),then m was sent by p to q
 \end{itemize}
-
+Our objective is hiding the probability behind infinity.
 
 
 
