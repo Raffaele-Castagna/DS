@@ -123,4 +123,24 @@ We signal crash failures with a star sign and byzantile failures with a !
 \end{center}
 Byzantine failures are a superset of Crashstop failures, so algorithms that will work on byzantine failures will always work on crash stop failures, but not the contrary.\\
 A process is \textbf{correct} if it does not experience a failure, every algorithm has a maximum number f of failures that i can experience.
+
+\subsection{Different types of links}
+
+\begin{defn}
+    An \textbf{Abstraction} is the formalization of a problem/object, to built one we must define the system model and formalize a problem/object so that there is no ambiguity regarding the properties of our abstraction
+\end{defn}
+For example let us abstract a link: it is something that may lose a message with a certain probability $pr$, the messages can be duplicated a finite number of times and they must come from somewhere.\\
+Inside a link we have two main eents:
+\begin{itemize}
+    \item \textbf{Requests}: <Send | q,m> sends message m to process q
+    \item \textbf{Indication}: <Deliver | p,m> delivers a message m from process p (this might just be an indetifier, e.g. an ip adress or mac address)
+\end{itemize}
+Now let us formalize this further via its properties:
+\begin{itemize}
+    \item \textbf{FL1}: (Fair loss) If a correct process p sends infinetely often m, a process q then delivers m an infinite number of times. (e.g. suppose we have $\frac{1}{2}$ probability and we send it over 10 times, then the probability will be $1 - \frac{1}{2^{10}}$ as events are independentm aka if we try hard enough we get the message)
+\end{itemize}
+
+
+
+
 \end{document}
