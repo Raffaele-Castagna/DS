@@ -399,4 +399,65 @@ the size of p1. When another process receives a message, it compares the element
 between the lists and take the maximum.\\
 We can say that one vector is less than the other (V (e) $<$ V(e')) if all components
 are $\leq$ and there is one component who is strictly less.
+\subsection{Lamport's Mutual Exclusion Algorithm}
+In this algorithm, we do not tolerate any crashes, but before talking about it, we need to introduce FIFO links.
+A FIFO link has the same properties as a P2P link, but also the following property:\\
+\textbf{FIFO}: if a process p delivers m before m' then m was sent before m'\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/links/FIFO1.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/links/FIFOalgo.png}
+\end{center}
+In the init handler we have a pending set (self-explanatory), a seq number equal to 0 and a del\_seq equal to 0.\\\\
+In the send event handler we first send the message via the P2P link in the form $<\text{msg, seq\_number}>$, and only after that do we add 1 to the seq number.\\\\
+When we get a delivery from the perfect link, we just add that message to our pending set.\\\\
+If there exists a message in pending such that the seq $=$ del\_seq, we first deliver the message and after that remove it from our pending list, lastly we just add 1 to our del\_seq\\\\
+
+Let us prove the FIFO property, as always let us start by contradiction:\\
+Suppose p delivers in reverse order m' and then m, even if m was sent befoer m', this means that the timestamp of m is lower than that of m', let t be the instant at which p delivers m', this implies that del\_seq $=$ timestamp(m'), this is of course, a contradiction, since for del\_seq to be equal to timestamp(m'), we should have had del\_seq$=$timestamp(m) (remember that del\_seq grows by oen unit each delivery). Thus m has been delivered before t.\\
+Finally let's a talk about Lamport's Mutual Exclusion Algorithm, which works only with FIFO links and does not tolerate failures.\\
+The Mutual Exclusion block will have a request in input (a process $p_1$ asks to enter the critical zone, and it will give it if possible), we also have a release in input (for when we have a go-ahead to actually use a resource) and a Grant in output (give access to a resource to a process), it will communicate with a FIFO link via send and deliver.
+\begin{center}
+    \includegraphics[scale=0.5]{img/mutex/graph.png}
+\end{center}
+We have 3 properties to respect:
+\begin{itemize}
+\item \textbf{Mutual Exclusion}: at any time t, only one process is inside the Critical Section
+\item \textbf{Liveness}: If a process p requests access, then it will eventually enter the CS
+\item \textbf{Fairness}: if the request of process p happens before the request of process q, then q cannot access the CS before p.
+
+\end{itemize}
+When a process wants to enter the CS it sends a request to all other processes, a history is maintained via scalar clocks.\\
+Each transmission and reception event is relevant to the computation, the clock is incremented after each action\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/mutex/algo.png}
+\end{center}
+This is algorithm for process $p_i$ (all processes have their own private variables)\\\\
+In init we have a request set and an ACK set, the request set is used to store requests for CS access by other processes, and the ACK sets are the replies we sent to the other processes.
+After that we initialize our scalar\_clock to 0 (+1 per event), we also have a variable my\_req set to Null and finally a set containing all the other processes $\prod$\\\\
+When we want to send a request to access the CS:\\
+We add 1 to our scalar clock, add it to my\_req and send a message via FIFO to all processes in the $\prod$ set, our requests contain our ID and the scalar clock value, in case the scalar clock value is the same, we use the one with the lower ID, in case they are different the lowest scalar clock wins. We also have a special field with flag REQ.\\\\
+When we want to release the CS:\\
+Set my\_req to null, add 1 to our scalar\_clock, and for all processes send a message where you say RLS $<p_{id},scalar\_clock>$\\\\
+There's a handler that grants us access to the CS:\\
+The handler tells us that when in the req set there doesn't exist a req with a lower timestamp and for all processes in the systems we have an ACK such that the timestamp of the ACK is higher than the timestamp of my message, only then can we enter the CS.\\\\
+And finally a handler to process everything (messages received etc.):\\
+When we deliver a message, we update our scalar clock as according to Lamport, after that we check the kind of message we received, if it's a REQ we put it into the Requests set and we increase our scalar clock, finally we send an ACK with our ID and scalar\_clock\\
+If it's an ack we add the message to our acks set.\\
+If it's a RLS, we check if there is a request in the req set where the sender of the currently processed req is equal to the sender of the message we received, then we remove that request from the requests set.\\\\
+\textbf{Proof of Mutual Exclusion}\\
+Let us assume we have 2 processes that enter the critical section: p1 and p2, if p2 entered that must mean that it received acks from all other processes and only after it sent the req message, same for p1. But if p1 entered before p2 that must mean that the req message of p1 has a lower timestamp than the req of p2.\\\\
+\textbf{Proof of fairness}\\
+Suppose $p_i$ enters before $p_i$ even if req of $p_i$ happened after req $p_i$. Since $p_i$ enters only after the ack of $p_i$, by FIFO it sees req $p_i$ before receiving the ack that allows him to enter.
+Since req $p_i$ happens before req $p_i$ we have $ts(req,p_i) < ts(req p_i)$ thus req($p_i$) is not the request with minimal timestamp in the set of $p_i$.
+\begin{center}
+    \includegraphics[scale=0.5]{img/mutex/example.png}
+\end{center}
+As a measure of complexity of the algo we either have a message complexity (number of messages we need to have), or time unit complexity (we suppose that each action takes 1 unit of time).\\
+In the worst case we need to wait (N-1) + 2 (wait for release by everyone else) + req
+
+
+
+
 \end{document}
