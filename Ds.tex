@@ -456,8 +456,61 @@ Since req $p_i$ happens before req $p_i$ we have $ts(req,p_i) < ts(req p_i)$ thu
 \end{center}
 As a measure of complexity of the algo we either have a message complexity (number of messages we need to have), or time unit complexity (we suppose that each action takes 1 unit of time).\\
 In the worst case we need to wait (N-1) + 2 (wait for release by everyone else) + req
-
-
-
-
+\subsection{Failure Detectors}
+Failure detectors, as the name imply, tell us when a process has crashed, they only work for carsh failures and are described by the following two propertise:
+\begin{itemize}
+    \item \textbf{Completeness}, the ability to detect all failures
+    \item \textbf{Accuracy}, the ability to avoid false suspicions
+\end{itemize}
+To actually implement a failure detector we utilize pings.\\
+For now we'll takl about \textbf{perfect failure detectors} (P), whose system model is synchronous, it utilizes crash failures and utilizes perfect synchronous P2P links. The basic way to tell if a process has crashed is by utilizing a timeout, in our case let us utilize the clock of our FD, and if the process doesn't respond then we can assume its crashed.\\
+For the purposes of this course, there is no algorithm for FD within an asynchronous system.
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/async.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/specs.png}
+\end{center}
+\begin{itemize}
+    \item \textbf{PFD1}: Strong Completeness: Eventually, every process that crashes is permanently detected by every correct process. (If a process crashes after some time, all processes that are correct wil signal this crash)
+    \item \textbf{PFD2}: Strong Accuracy: If a process p is detected by any process, then p has crashed. (If the algo signals that a process has crashed, then it must have crashed)
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/algo.png}
+\end{center}
+When we initialize we have an alive set with all the processes, a detected set that is empty (where we store the crashed processes), after that we start a timer with delta.\\\\
+When we have a deliver event (we get pinged) we reply, at the same time with another handler we add the process that pinged us to the alive set.\\\\
+When we get a timeout, for every process we first check if it isn’t part of the alive set and if it isn’t part of the crash set, if both of these conditions are true, we add p to our detected set and we trigger Crash(p).\\\\
+If one of these conditions isn’t true then we send a ping to that process.\\\\
+\textbf{Proof of Correctness}\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/PoSC.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/PoSA.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/Example1.png}
+\end{center}
+Yes this is possible as strong completeness only says that eventually all crashed processes are detected by all correct processes, it does not say when.\\
+But then considering the algo we have used up until now (exclude on timeout), if at time t I do not have process p in my detected set can I state that p is alive at time t? No, as FD do not give us information about current processes, you simply don't know if its dead.\\
+Let us try and improve p, normally each process needs atleast 2N messages (N pings and N pongs) to detect a crash, so the total number of messages becomes $2N^2 * N$.\\
+We could cut the number of messages by half since due to the fact that every process pings all other processes, then we could count the pings as statements of being alive.\\\\
+A way to actually do this is \textbf{Round Based P}, which introduces the concept of rounds.
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/Round-based.png}
+    \includegraphics[scale=0.5]{img/FD/Round-based-2.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/PoRB.png}
+    \includegraphics[scale=0.5]{img/FD/PoRB2.png}
+\end{center}
+So why is this algorithm important? Because with this we can see the equivalence between a synchronous sytem and round-based systems.\\
+Another question we need to ask ourselves is if decreasing is worth it, certainly we may detect crashes faster, but we may also be wrong and make mistakes, therefore what if we correct those mistakes?\\
+This leads us to the concept of \textbf{Eventually Perfect Failure Detectors} (denoted with $\Diamond$P), which are FD that may make mistakes, but eventually they will stop making them.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/FD/DiamondPPropertiers.png}
+    \includegraphics[scale=0.5]{img/FD/BasicsDiamond.png}
+    \includegraphics[scale=0.5]{img/FD/DiamondPAlgo.png}
+\end{center}
 \end{document}
