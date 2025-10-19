@@ -513,4 +513,53 @@ This leads us to the concept of \textbf{Eventually Perfect Failure Detectors} (d
     \includegraphics[scale=0.5]{img/FD/BasicsDiamond.png}
     \includegraphics[scale=0.5]{img/FD/DiamondPAlgo.png}
 \end{center}
+In the suspected set we put all processes that are dead (or atleast that we think are dead), if a message we received is delayed, then it won't be neither supected nor alive, if this condition is true, then we add it to the suspected set and we trigger suspect.
+Whenever we have a timeout we also add a certain amount of time delta to the delay, then we iterate through every process, if the process isn't in both alive and suspected, we add it to suspected, if the process is in both we restore it, and in any case we send a heartbeat request.\\\\
+Now suppose we had $p_1,p_2,p_3$ where $p_2$ crashed at a certain point, could $p_1$ received a restore event for $p_2$ after it died? Yes because the message sent by $p_2$ may have been delayed, though the times it can happen is finite since eventually it died.\\
+To avoid this behaviour we could introduce rounds, and only consider messages from the current round,but the strong completenss property actually voids this necessity.\\\\
+\textbf{Proof of Correctness}\\
+\textbf{Strong Completeness}: If a process crashes, it will stop sending messages. Therefore the process will be suspected by any correct process and no process wil revise the judgement.\\
+\textbf{Eventual Strong Accuracy}: After time t, the system becomes synchronous, after that time a message sent by a correct process p to another one q will be delivered within a bounded time (the time is MAX-DELAY unknown to us). If p was wrongly suspected by q, then q will revise its
+ suspicious. Moreover q increases its delay, if the new delay is less than MAX-DELAY, eventually q suspects again p and then it corrects again its delay. After a finite number of erros the delay of q will be greater than 2*MAX-DELAY.
+Now let us talk about the following lemma:\\
+Take two correct processes $p_1,p_2$, and let suspected1 and suspected2 be their respective sets. There is a time t (stabilization time after which suspected1=suspected2)\\
+\textbf{Proof}: Suppose there exists a p in suspected1 but not suspected2, if p is correct it violates the eventual strong accuracy, if p is crashed this violates the strong completeness.\\
+FDs are strong, but they only tell us if a failure has occured, and we may be interested in knowing if a process is alive, for that we need a coordinator, or mroe precisely, a leader.\\
+\subsection{Leader Election}
+\begin{center}
+    \includegraphics[scale=0.5]{img/LE/leader_prop.png}
+    \includegraphics[scale=0.5]{img/LE/leader_algo.png}
+\end{center}
+\textbf{Proof of Correctness}\\
+\textbf{Eventual detection}: Comes from P.
+\textbf{Accuracy}: Comes from strong accuracy of P.\\
+What if we were in an eventually sync system (so not perfect FD)?.\\
+Then we would use \textbf{Eventual Leader Election $\Omega$}.
+\begin{center}
+    \includegraphics[scale=0.5]{img/LE/ele-prop.png}
+\end{center}
+$\Omega$ ensures that eventually all correct processes agree on the same correct process as leader.\\
+With $\Omega$ we can have that:
+\begin{itemize}
+    \item Leaders change in an arbitrary manner and for an arbitrary period of time
+    \item many leaders might be elected during the same period without having crashed.
+\end{itemize}
+Once a Unique leader is determined and does not change again we can say that the leader has \textit{stabilized}.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/LE/ele-algo.png}
+\end{center}
+We just have the two handlers for $\diamond P$.\\
+The algorithm is correct becase the suspected set has a spacial property, that suspected sets in different processes will converge.
+\begin{center}
+    \includegraphics[scale=0.5]{img/LE/ele-proof.png}
+\end{center}
+Now let's see some applications:\\
+Here we see FDs applied to Lamport's ME.
+\begin{center}
+    \includegraphics[scale=0.5]{img/LE/ME1.png}
+    \includegraphics[scale=0.5]{img/LE/ME-Original.png}
+    \includegraphics[scale=0.5]{img/LE/ME-Problems.png}
+    But this is not enough, image if you receive a req from $p_j$ after the crash detection
+    \includegraphics[scale=0.5]{img/LE/Me-Correct.png}
+\end{center}
 \end{document}
