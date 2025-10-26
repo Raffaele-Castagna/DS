@@ -558,8 +558,173 @@ Here we see FDs applied to Lamport's ME.
 \begin{center}
     \includegraphics[scale=0.5]{img/LE/ME1.png}
     \includegraphics[scale=0.5]{img/LE/ME-Original.png}
-    \includegraphics[scale=0.5]{img/LE/ME-Problems.png}
+    \includegraphics[scale=0.5]{img/LE/ME-Problems.png}\\
     But this is not enough, image if you receive a req from $p_j$ after the crash detection
     \includegraphics[scale=0.5]{img/LE/Me-Correct.png}
 \end{center}
+
+\section{Broadcast}
+When we want to send a message to every process in a system, we use broadcast algorithms, now this would be simple if it were not for the fact that processes can fail.\\
+\textbf{Best Effort broadcast} (BEB) has the following properties:
+\begin{itemize}
+    \item \textbf{BEB1} (Validity): If a correct process p broadcasts a message m, then all correct processes eventually deliver m.
+    \item \textbf{BEB2} (No duplication): No message is delivered more than once
+    \item \textbf{BEB3} (No creation): No message is delivered unless it was previously broadcast by some process.
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/BEB-desc.png}
+\end{center}
+The correctness of all three properties stems from the use of perfect links.\\\\
+BeB is a good algorithm, however it only ensures that the messages are delivered, as long as the sender does not fail, but what if it failed?\\
+Processes do not have a common view of messages sent by the non-correct, this of course may cause some problems in distributed chat applications, as a message from a client that crashes could only reach certain processes.
+So we want an agreement on the set of messages to be delivered, at least among the correct processes (either all-correct or nothing).\\
+
+\subsection{Reliable Broadcast} (RB) has the following properties:
+\begin{itemize}
+    \item \textbf{RB1} (Validity): If a correct process p broadcasts a message m, then all correct processes eventually deliver m.
+    \item \textbf{RB2} (No duplication): No message is delivered more than once
+    \item \textbf{RB3} (No creation): No message is delivered unless it was previously broadcast by some process.
+    \item \textbf{RB4} (Agreement): If a correct process delivers a message m, then all correct processes eventually deliver m.
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/RB-algo.png}
+\end{center}
+RB4 and RB1 together are as strong as BeB.\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/example.png}
+\end{center}
+First is BEB since $p_3$ does not deliver the green arrow (assuming the state is the same for infinity), the second one is reliable, because all the correct processes receive the same set of messages, only the green one is not sent as $p_1$ isn't reliable, but since it is reliable it is also BEB, as one implies the other, but not the inverse.\\
+If $p_2$ were to not deliver the orange message then it isn't BeB as it  violates validity for BeB, if $p_1$ were to deliver a purple message and only $p_3$ receives it, its BEB, if no one receives it its RB.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/RB-algo2.png}
+\end{center}
+Validty and no creation are ensured by BEB\\
+No duplication, by the check if m not from[p]\\
+The agreement property: suppose by contradiction that process p Is correct and delivers message m with original sender q, while another correct p' does not deliver m.\\
+1)	If q does not crash then, by BEB also p; delivers m.\\
+2)	If q crashes and p detects the crash before receiving m, then p relays the message.\\
+3)	If q crashed and p detects the crash after delivering m, then p also relays message m. By BEB p' also delivers m.\\
+In the best case scenario we send N messages, in the worst case $N^2$.\\
+For the message delay we only need 1 time unit, in the worst case we need N-1 time units.\\\\
+What if we had an eventually perfect FD?\\
+In case a suspected process actually crashes, we won't have a problem, if it doesn't crash we still don't actually have one.\\
+What if instead we want to implement a fail silent system (no FD) in an async system?\\
+\subsection{Eager Reliable Broadcast}
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/erb.png}
+\end{center}
+In the best and worst case we create $N^2$ messages and $N-1$ time units.\\\\
+However we have a strogner algorithm than RB, as in RB if we had a situation wher $p_3$ crashes and sends a message just before, the other processes dont see the message.\\
+This algorithm is \textbf{Uniform Reliable Broadcast} (URB) which has the following properties:
+\begin{itemize}
+    \item \textbf{URB1} (Validity): If a correct process p broadcasts a message m, then all correct processes eventually deliver m.
+    \item \textbf{URB2} (No duplication): No message is delivered more than once
+    \item \textbf{URB3} (No creation): No message is delivered unless it was previously broadcast by some process.
+    \item \textbf{URB4} (Uniform Agreement): If a message m is delivered by some process (correct or faulty), then m is eventually delivered by every correct process. (Uniform means that we don’t know the size of the system, in our case we mean a property that holds for the faulty processes)
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/URB.png}
+    \includegraphics[scale=0.5]{img/broadcast/URB-algo.png}
+\end{center}
+When we need to broadcast, we put our message to the pending set and then trigger a BEB broadcast.\\
+When we receive a deliver event (suppose p1 is sending it) p2 check if it’s the first time p1 sent that message, he acks the message, put it into the pending set and then trigger a beb.\\
+We use a beb because in this way we take care of the case where the sender is faulty.\\
+When candeliver(m) returns true, then that means that every other processes has ack’d the message.\\\\
+\textbf{Proof of Correctness}\\
+Statement: If a correct process p, sees a message m it will eventually deliver it.\\
+Proof: By assumption p is correct, thus its message will reach every other correct process (BEB) By the strong completeness of FD Eventually process p detects as a crashed all the crashed processes, thus it will not wait forever for an ack of a crashed process Therefore, candeliver(m) on p will be true.\\
+Agreement proof: By contradiction. Suppose $p_5$ (faulty) delivers m and $p_6$ correct does not. The only possibility is that $p_6$ does not see the message this implies that $p_6$ is detected faulty by $p_5$, $p_5$ delivers without receiving the ack from $p_6$. This contradicts the strong accuracy of the FD P.\\\\
+Time complexity: 2 for best case, N for worst case.\\\\
+Message complexity: best case = worst case,$N^2$ messages\\
+Now let's try building it in an async system (perfect link and no FD = fail silent).\\
+\subsection{Quorum}
+We have n processes in our set of total processes P, a quorum is any subset of P of size at least n/2 + 1 (A Majority of processes)\\
+Any two quorums intersect in at least one processes (by contradiction: suppose two quorums do not intersect, then they have all distinct processes)\\
+We have n processes in total, and f faulty (crash-stop)\\
+C set of correct processes\\
+F set of faulty processes\\
+WE DO NOT KNOW WHO IS IN WHAT\\
+If we assume f to be < n/2 (i.e. majority of processes are in C) then: Any quorum Q of P contains at least one correct process (C is a quorum, Q is a quorum, two quorums intersect)\\
+If we assume f < n/2 then: Any quorum Q of P contains at least one correct process (C is a quorum, two quorums intersect)\\
+So to actually build it we can assume that f < n/2 and if we send the message to at least one correct, we can assume that it will be delivered. Then if we send the message to everyone in the system if we receive the number of acks greater than N/2 then we can send it.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/broadcast/quorum-impl.png}
+    \includegraphics[scale=0.5]{img/broadcast/majority-ack.png}
+\end{center}
+Could we have the algorithm to have F = n/2 + 1?\\\\
+Suppose we have p1-p4 faulty and p5 and p6 correct, if p5 sends a message, it must send a message, and all the other processes receive the message but die before sending the ack, p5 will only have 2 acks and will never be able to deliver the message.
+\subsection{Ordered Communications}
+Before we didn't care about order, but in Real life most of the time it matters and we care about 3 types of orders:\\
+FIFO, causal ordering, total ordering of deliveries.\\\\
+An advantage is the fact that we have Orthogonal (independent) reliable communication, as reliable broadcast does not have any property on ordered delivery of messages, so we need to add an ordering property to the reliable communication.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/Ordered/Fifo-specs.png}
+    \includegraphics[scale=0.5]{img/Ordered/Fifo-impl.png}
+\end{center}
+Fifo is not always enough and therefore we introduce causal ordering, 
+If a message m1 may have potentially caused another message m2 any of the following holds:
+Some process p broadcasts m1 before it broadcasts m2\\
+Some process p delivers m1 and subsequently broadcasts m2\\
+There exists some message m’ such that m1 -> m’ and m’ -> m2\\
+\subsection{Causal Order Broadcast} (COB) has the following properties:
+\begin{center}
+    \includegraphics[scale=0.5]{img/Ordered/Causal-Order.png}
+    \includegraphics[scale=0.5]{img/Ordered/Causal-Order-alg.png}
+\end{center}
+In the past vector we attach our entire history.\\
+When we check if a message is in mpast, we need to scan the list in the order you’ve been given.\\
+Though this algorithm has a problem when our past vector is too large.\\
+So to actually delete messages we could see if everyone has the message in their past, (utilizing acks) then we can remove it.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/Ordered/Improved.png}
+\end{center}
+But even in this case the past can stay big for a long amount of time.\\
+So we can implement vector clocks to not use the past vector, and only send the messages with the information.
+\begin{center}
+    \includegraphics[scale=0.5]{img/Ordered/Waiting-causal.png}
+\end{center}
+
+In this algorithm we increase the vector clock counter only after sending the message, not before.\\
+(lsn is local sequence number, increased every time we generate something)\\\\
+The fifo property is of course respected as we check that the scalar clock of the received message is leq.
+Now, even if causal broadcast is strong,sometimes it isn’t enough, therefore we need something stronger (e.g. imagine a bank that has interest, in that case we cant just use causal)\\
+Therefore we introduce total order broadcast which orders all the messages in the system, even the concurrent messages. The main property of this algorithm is that if a process sees some messages in an order, then everybody sees the same order.
+Total order is orthogonal with respect to FIFO and Causal order, this means that the order is not FIFO or Causal, just that everyone has the same view.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 \end{document}
