@@ -480,8 +480,8 @@ For the purposes of this course, there is no algorithm for FD within an asynchro
 \end{center}
 When we initialize we have an alive set with all the processes, a detected set that is empty (where we store the crashed processes), after that we start a timer with delta.\\\\
 When we have a deliver event (we get pinged) we reply, at the same time with another handler we add the process that pinged us to the alive set.\\\\
-When we get a timeout, for every process we first check if it isn’t part of the alive set and if it isn’t part of the crash set, if both of these conditions are true, we add p to our detected set and we trigger Crash(p).\\\\
-If one of these conditions isn’t true then we send a ping to that process.\\\\
+When we get a timeout, for every process we first check if it isn't part of the alive set and if it isn't part of the crash set, if both of these conditions are true, we add p to our detected set and we trigger Crash(p).\\\\
+If one of these conditions isn't true then we send a ping to that process.\\\\
 \textbf{Proof of Correctness}\\
 \begin{center}
     \includegraphics[scale=0.5]{img/FD/PoSC.png}
@@ -620,16 +620,16 @@ This algorithm is \textbf{Uniform Reliable Broadcast} (URB) which has the follow
     \item \textbf{URB1} (Validity): If a correct process p broadcasts a message m, then all correct processes eventually deliver m.
     \item \textbf{URB2} (No duplication): No message is delivered more than once
     \item \textbf{URB3} (No creation): No message is delivered unless it was previously broadcast by some process.
-    \item \textbf{URB4} (Uniform Agreement): If a message m is delivered by some process (correct or faulty), then m is eventually delivered by every correct process. (Uniform means that we don’t know the size of the system, in our case we mean a property that holds for the faulty processes)
+    \item \textbf{URB4} (Uniform Agreement): If a message m is delivered by some process (correct or faulty), then m is eventually delivered by every correct process. (Uniform means that we don't know the size of the system, in our case we mean a property that holds for the faulty processes)
 \end{itemize}
 \begin{center}
     \includegraphics[scale=0.5]{img/broadcast/URB.png}
     \includegraphics[scale=0.5]{img/broadcast/URB-algo.png}
 \end{center}
 When we need to broadcast, we put our message to the pending set and then trigger a BEB broadcast.\\
-When we receive a deliver event (suppose p1 is sending it) p2 check if it’s the first time p1 sent that message, he acks the message, put it into the pending set and then trigger a beb.\\
+When we receive a deliver event (suppose p1 is sending it) p2 check if it's the first time p1 sent that message, he acks the message, put it into the pending set and then trigger a beb.\\
 We use a beb because in this way we take care of the case where the sender is faulty.\\
-When candeliver(m) returns true, then that means that every other processes has ack’d the message.\\\\
+When candeliver(m) returns true, then that means that every other processes has ack'd the message.\\\\
 \textbf{Proof of Correctness}\\
 Statement: If a correct process p, sees a message m it will eventually deliver it.\\
 Proof: By assumption p is correct, thus its message will reach every other correct process (BEB) By the strong completeness of FD Eventually process p detects as a crashed all the crashed processes, thus it will not wait forever for an ack of a crashed process Therefore, candeliver(m) on p will be true.\\
@@ -665,14 +665,14 @@ Fifo is not always enough and therefore we introduce causal ordering,
 If a message m1 may have potentially caused another message m2 any of the following holds:
 Some process p broadcasts m1 before it broadcasts m2\\
 Some process p delivers m1 and subsequently broadcasts m2\\
-There exists some message m’ such that m1 -> m’ and m’ -> m2\\
+There exists some message m' such that m1 -> m' and m' -> m2\\
 \subsection{Causal Order Broadcast} (COB) has the following properties:
 \begin{center}
     \includegraphics[scale=0.5]{img/Ordered/Causal-Order.png}
     \includegraphics[scale=0.5]{img/Ordered/Causal-Order-alg.png}
 \end{center}
 In the past vector we attach our entire history.\\
-When we check if a message is in mpast, we need to scan the list in the order you’ve been given.\\
+When we check if a message is in mpast, we need to scan the list in the order you've been given.\\
 Though this algorithm has a problem when our past vector is too large.\\
 So to actually delete messages we could see if everyone has the message in their past, (utilizing acks) then we can remove it.\\
 \begin{center}
@@ -687,14 +687,145 @@ So we can implement vector clocks to not use the past vector, and only send the 
 In this algorithm we increase the vector clock counter only after sending the message, not before.\\
 (lsn is local sequence number, increased every time we generate something)\\\\
 The fifo property is of course respected as we check that the scalar clock of the received message is leq.
-Now, even if causal broadcast is strong,sometimes it isn’t enough, therefore we need something stronger (e.g. imagine a bank that has interest, in that case we cant just use causal)\\
+Now, even if causal broadcast is strong,sometimes it isn't enough, therefore we need something stronger (e.g. imagine a bank that has interest, in that case we cant just use causal)\\
 Therefore we introduce total order broadcast which orders all the messages in the system, even the concurrent messages. The main property of this algorithm is that if a process sees some messages in an order, then everybody sees the same order.
 Total order is orthogonal with respect to FIFO and Causal order, this means that the order is not FIFO or Causal, just that everyone has the same view.
 
+\section{Registers}
+Let's talk about registers, on modern cpus we have multiple cores, we, of course, would like to utilize all the cores and therefore we need a  way for each processes to communicate with each other and share information (and memory!)\\
+We want to implement  a distributed register that has 2 operations, read and write, which in turn, read and write certain register locations.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/rop1.png}\\
+    Each operation is not atomic in time, as it needs an invocation time, time to do what it needs to do and then time to actually terminate.
+    \includegraphics[scale=0.5]{img/registers/rop2.png}
+\end{center}
+We need to make some assumptions:
+\begin{itemize}
+    \item When a register is initialized a specific value is already in it (most cases zero or bottom), and it can store only positive numbers.
+    \item Each written value is univocally identified
+    \item Operations on the same process are sequential
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/assumptions.png}
+\end{center}
+Of course, operations can fail, we say that an operation fails if the process that starts the operation fails at a certain time t' before the end of the operation.\\\\
+We still need to define the order of operations, formally, given two operations, o precedes o' if the return event of o precedes the invocation of o', also if the start of o' precedes the end of o', we say that they are concurrent.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/concurrent.png}
+    \includegraphics[scale=0.5]{img/registers/failures.png}
+\end{center}
+In this case Op1 does not have an end invocation, therefore Op1 and Op2 are concurrent.\\\\
+Let’s proceed with the semantics of the registers.\\
+\textbf{Strictly serialized semantics}: a process can write on a register only by having a lock, also we assume that there are no failures.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/sss.png}
+    \includegraphics[scale=0.5]{img/registers/concurrency.png}
+    \includegraphics[scale=0.5]{img/registers/failures.png}
+\end{center}
+When we have concurrent writes/read the semantics become difficult to formalize. Even when we have failures we have problems, as for example, when a process fails, it never releases the lock. So it's clear that we need to define a set of useful semantics that work with concurrency and restrict the set of allowed executions.\\\\
 
-
-
-
+\subsection{Regular Registers}
+(X,Y) denotes a register where X processes can write and Y processes can read, the most common register is (1,N), and there exist registers that are (N,N), where every process is both writer and reader.\\
+(1,N) regular register has the following properties:
+\begin{itemize}
+    \item \textbf{Termination}: If a correct process invokes an operation, then the operation eventually receives the corresponding confirmation.
+    \item \textbf{Validity}: A read operation returns the last value written or the value concurrently written
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/1-n_interface.png}
+\end{center}
+The main idea is that each process keeps a local copy of the register (set to null), and the single writer has to ensure the consistencies of copies, and when I read, I read from the local copy.\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/alg-creation.png}
+\end{center}
+When a write value v is triggered by the only write p0, then p0 BEBcast v to all. When I receive a new value I update my local copy.\\
+However in the case above, if p1 were to read before receiving the value it would give the wrong value, therefore we need to wait for acks.
+When the set of correct process is a subset of the acks, then we end the write operation.\\
+We don’t use stronger broadcasts as that would have a lot more broadcasts.\\\\
+Let’s see the code for the fail stop w/ P FD and P2P link.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/rr-alg.png}
+\end{center}
+In the init, val is the local value copy, we have a set of all correct messages, and we have a writeset where we keep the set of processes that gave us an ack.\\\\
+Someone will start and write a certain value, we broadcast that value and other processes start reaching that value, that other process keeps that value in its local copy and sends the ack, this ack (when delivered) will then make the process that started the write operation add the process that set to the writeset. When the writeset is equal to correct then, we first empty the writeset and then we trigger a write return.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/rr-correctness.png}
+    \includegraphics[scale=0.5]{img/registers/f-wr.png}
+\end{center}
+The message complexity s O(N) for each write O(1) for each read, and communications steps is 2 steps for write and 0 for read\\
+We can weaken FD P to Diamond P, but that leads to a not correct algorithm with the old algorithm, so we need to modify it
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/failure-alg.png}
+\end{center}
+So let us adapt the algorithm for Fail-Silent by using the quorums, but we must assume that there is one writer and N readers, and we want a majority of correct processes.\\\\
+For the read, assuming we ask all processes their local value, and we take the value in the majority of processes. We may have a problem where a write operation ends, but not all processes actually have the value, at the same time we start another write operation and therefore we may have a set containing value 1 and another set containing value 2, therefore we need to fix this utilizing timestamps.\\\\
+So when we write, we need to send the timestamps, and by utilizing these timestamps, we take the value with the highest timestamp (even if there is only one)
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/maj-votye.png}
+    \includegraphics[scale=0.5]{img/registers/scenario.png}
+\end{center}
+Message complexity is 2N for both read and write, and 2 steps for both read and write.\\
+The number of maximum failures is n/2 – 1 (for the quorum).
+\subsection{Sequential and Atomic Registers}
+The definition for the sequential is ‘the result of any execution is the same as if the (read and write) operations by all processes on the data store were execute din some sequential order and the operations of each individua process appear in this sequence inn the order specified by its program’ aka we need to find a fictional order that justifies the operations we get, as long as we don’t mess up the order of the operations in a single process.\\
+A smaller definition is ‘There exists a global ordering, that respects the local ordering seen by each process’
+A RR does not imply sequential and viceversa, they are independent.\\\\
+The definition for atomicity is: "Each operation should appear to take effect instantaneously at soe moment between its start and completion”. The moment is the linearization point of the operation.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/atom1.png}
+    \includegraphics[scale=0.5]{img/registers/seq/atom2.png}\\
+    This execution is not linearizable as the blue happens after the pink, but if pink reads 5, that means that the effect has already happen, and everyone should read 5 after.
+\end{center}
+Linearity implies regular, e.g. a write as a linearization point LP, after the LP anyone sees the write. The LP happens inside the write, thus each successive read has to read the value.
+Linearity also implies sequentiality.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/relationship.png}
+\end{center}
+When doing exercises with atomic reads, you should always draw a tree to remember which path you took.
+\subsection{Atomic Registers}
+The properties for 1-N atomic registers are:
+\begin{itemize}
+    \item \textbf{Termination}: if a correct process invokes an operation, then the operation eventually receives the corresponding confirmation.
+    \item \textbf{Validity}: A read operation returns the last value written or the value currently being written.
+    \item \textbf{Ordering}: if a read returns v2 after a read that precedes it has returned v1, then v1 has not been written after v2.
+\end{itemize}
+The interface for 1-N atomic registers is the following:
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/1-n-inf.png}
+\end{center}
+There are 2 algorithms, one where we don’t use messages to communicate just regular registers and one where we only use messages to communicate.
+If you can solve a problem with messages you can solve a problem with shared memory.\\
+But neither algorithm is stronger, they are equivalent.
+\subsection{1-N via Regular Registers}
+For 1-N we have 2 main phases:
+\begin{itemize}
+    \item 1 We use a 1-N RR to build a 1-1 AR.
+    \item 2 We use a set of 1-1 AR to build a 1-N AR.
+\end{itemize}
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/1-N problem.png}\\
+    This is the only case in which we have a problematic execution, this can be fixed by:
+    \includegraphics[scale=0.5]{img/registers/seq/idea.png}
+    \includegraphics[scale=0.5]{img/registers/seq/1-n-rr-alg.png}
+    \includegraphics[scale=0.5]{img/registers/seq/1-n-rr-correctness.png}
+\end{center}
+Now let’s see step 2, we need to build a 1-1 register for each process pair.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/p2-problem.png}
+    \includegraphics[scale=0.5]{img/registers/seq/p2-fix-1.png}
+    \includegraphics[scale=0.5]{img/registers/seq/p2-fix-2.png}
+\end{center}
+But still, if we read from one register, another process could not have that value, and therefore we need to propagate that value.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/p-2-init.png}
+    \includegraphics[scale=0.5]{img/registers/seq/p-2-alg.png}
+    \includegraphics[scale=0.5]{img/registers/seq/p-2-correctness.png}
+\end{center}
+So when is the linearization point in this algorithm?
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/seq/lin-algo.png}
+\end{center}
+This algorithm has the termination property, therefore even a process fails, we won’t have a problem, therefore we can tolerate N-1 failures.\\
 
 
 
