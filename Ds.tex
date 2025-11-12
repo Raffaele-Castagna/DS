@@ -826,6 +826,134 @@ So when is the linearization point in this algorithm?
     \includegraphics[scale=0.5]{img/registers/seq/lin-algo.png}
 \end{center}
 This algorithm has the termination property, therefore even a process fails, we won’t have a problem, therefore we can tolerate N-1 failures.\\
+\subsection{1-N via message passing}
+We'll need some assumptions on the capabilities of detecting failures, or the number of correct processes (needs to be above a certain threshold).\\\\
+We'll start with the Read-Impose Write-All, it uses the perfect failure detector P, beb and p2p links.\\\\
+For this algorithm we send our value to everyone, and we wait for their ACKS, when we receive the ACKS from all correct processes then we can terminate.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/msg/first.png}
+\end{center}
+I terminate my write when I received the ACK from everyone in the system. If a guy start reading (like where "read" is written), we can't just terminate there,
+as if p2 reads after he would read $\perp$ and not 5 as p1. We have to fix the problem that a simple local read will not fix the value for
+others. So, we do something similar to registers. When we read, we start reading
+the local value, and send this to everyone. Processes receiving this value will
+update their local value if tsrec $>$ tssaved. The read will terminate when the reading
+process has received ACKs. It's called read-impose as the reader tries to impose his value on other readers.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/msg/alg.png}
+    \includegraphics[scale=0.5]{img/registers/msg/perf.png}
+\end{center}
+The writeset contains the ACKs. In readval we save the local value we want to
+read. reading=False is used to distinguish the case in which we are the original writer,
+from the case we are the reader imposing the value.
+In the Read Return, we return readval and not val, so we return the value we were
+imposing on other people.
+
+Now, can we extend this idea in a Fail-Silent system?\\
+Yes, we can use the quorums. When we write, we'll wait for ACKs from a quorum
+(majority of ACKs). When I read, it has to read from a quorum.
+This pattern, however, is not enough to solve the ordering between reads.
+Termination: same for (1, N) regular register
+Validity: same as (1, N) regular register
+Ordering: to complete a read operation, the reader process has to be sure that
+every other process has in its local copy of the register a value with timestamp
+bigger or equal of the timestamp of the value read. In this way, any successive
+read could not return an older value.
+Let us imagine that the system (p0, p1, p2, p3, p4) works by having a writer starting
+w(5), and he dies in the middle. The message for the write will reach only one
+process, and so p1 will go to (1, 5). Then p1 will read and impose the value on
+everyone, waiting for 3 = n
+2 + 1 acks. If p3 wants to read now, he could receive
+from itself, p2 and p4 the ACKs, and he would read (0, $\perp$).
+Apparently, until now,
+we weren't imposing the value.\\\\
+So, the read will work by also imposing the value he is reading, like the algorithm
+above.
+Important note: the read does not happen locally like in the algorithm
+above, but a process has to ask the value to other processes, and waits for a
+quorum.
+So a read will have a first phase, query phase, asking for their values. When he
+receives a quorum of value, I take the maximum value, and I impose it to others
+(and wait for ACKs), so this is the imposing phase.
+So, the read will work by also imposing the value he is reading, like the algorithm
+above.
+Important note: the read does not happen locally like in the algorithm
+above, but a process has to ask the value to other processes, and waits for a
+quorum.\\\\
+So a read will have a first phase, query phase, asking for their values. When he
+receives a quorum of value, I take the maximum value, and I impose it to others
+(and wait for ACKs), so this is the imposing phase.
+\begin{center}
+    \includegraphics[scale=0.5]{img/registers/msg/fs-alg.png}
+    \includegraphics[scale=0.5]{img/registers/msg/fs-alg2.png}
+    \includegraphics[scale=0.5]{img/registers/msg/fs-alg-proof.png}
+\end{center}
+When we have an algorithm with quorums, we have to distinguish requests, so we
+use a rid
+for the requests coming from a process.\\
+When we are a writer and we write, we also increase the rid by 1. This as we have
+to distinguish the ACKs for a specific operation of write.
+\section{Synchronous consensus}
+If we are able to solve consensus, we can solve almost all problems that matter.\\\\
+Suppose you are in a database and need to commit a transaction, you need to be sure that transaction must be done and not aborted.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/first.png}
+\end{center}
+At a certain point we have to decide, we can't have p1 saying to abort and p2 to
+proceed. And so the consensus problem is the problem where everyone has its own
+opinion, and then we have to decide if we have to abort for everyone or commit for
+everyone. So any process can propose a value (0,1), and then everyone has to
+decide a value that is the same for everyone. This kind of consensus is known as
+Binary Consensus.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/bi-specs.png}
+\end{center}
+We don’t necessarily need to pick the value proposed by the majority, however when we the majority has the only value present in the system, then we need to pick it.\\
+Our algorithm uses LE to actually get to a consensus.
+We may have a problem when process 1 dies, but since we have FD and can see if P1 dies, if it dies we can elect P2 as a leader, it may just decide to propose the value proposed by P1 before, but we have a problem if p1 messages are delayed and e.g. p4 decides the value of p1 immediately and p2 decides another value.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/h1.png}
+    \includegraphics[scale=0.5]{img/consensus/le/h2.png}
+    \includegraphics[scale=0.5]{img/consensus/le/h3.png}
+    \includegraphics[scale=0.5]{img/consensus/le/h4.png}
+\end{center}
+So we need to solve this issue, the idea is that we divide the algorithm in logical rounds, but not the logical rounds we’ve seen before, as they are a bit different.\\\\
+E.g P1 decides the value and then sends the value to other people, when the others receive the value decided by P1,
+they just change idea and change the value they might decide, when we go to round 2,
+then P2 will decide its value, next round P3 and so on. We need to also account for the fact that the leader may crash,
+and when it crashes we just change rounds, and when the $round number == my_id$ we do the decision action.\\
+So the correct process with the minimum id will decide the value, and that value will be propagated.
+
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/alg.png}
+\end{center}
+
+We have an empty set detectedranks (id of guys who are dead), delivered (array of Boolean values that helps us understand if we go to another round), and proposer that keeps track of which pid last made me change idea.
+In propose we need to check if proposal is bottom since we cant propose 2 values.
+When the round is our rank, we need to propose something and we haven’t broadcast anything, then we trigger our broadcast and decise event, if we didn’t have the check on the Boolean variable we would violate integrity.
+When we receive a decided message from another process, we check if the rank of the sender is less than our own, and check if its higher than the proposer, if yes then we change our proposal and proposer, after that in any case we put delivered[r] to true, if we don’t do that we wouldn’t go to a new round.
+
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/correctness.png}
+    \includegraphics[scale=0.5]{img/consensus/le/correctness2.png}
+    \includegraphics[scale=0.5]{img/consensus/le/correctness3.png}
+    \includegraphics[scale=0.5]{img/consensus/le/perf.png}
+\end{center}
+
+Let’s look at the uniform consensus variant, the relationship between them is the same for regular and uniform broadcast, e.g. we have a consensus with he properties of the last one and what changes is the agreement.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/uhc.png}
+\end{center}
+As we said before, if we decide immediately we may have some problems, therefore to actually fix this, we use acks, and we decide late.\\\\
+So when its your round, you propose a value and wait for the acks, when the acks are enough you decide and send a message to everyone saying that they need to decide with your value, even if they receive another value, thereby having an early termination, but only if you received all the acks.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/uhc-alg.png}
+    \includegraphics[scale=0.5]{img/consensus/le/uhc-correctness.png}
+    \includegraphics[scale=0.5]{img/consensus/le/uhc-correctness2.png}
+    \includegraphics[scale=0.5]{img/consensus/le/uhc-perf.png}
+\end{center}
+
+
 
 
 
