@@ -952,17 +952,75 @@ So when its your round, you propose a value and wait for the acks, when the acks
     \includegraphics[scale=0.5]{img/consensus/le/uhc-correctness2.png}
     \includegraphics[scale=0.5]{img/consensus/le/uhc-perf.png}
 \end{center}
+Any consensus algorithm must have an execution which has time of f + 1.\\\\
+Let’s look at the proof of lower bound on time.\\
+We need to introduce the full information protocol where t each round each process sends its entire states to others via broadcast. Each synchronous protocol can be expresses as a FIP. With FIP each process collect all possible information on the system, it builds a view of the system and then decides locally.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/fip.png}
+    \includegraphics[scale=0.5]{img/consensus/le/fip2.png}
+    \includegraphics[scale=0.5]{img/consensus/le/fip3.png}
+\end{center}
+This algorithm would solve consensus in 1 round, but what if it had failures?
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/fip-failure1.png}
+    \includegraphics[scale=0.5]{img/consensus/le/fip-failure2.png}
+\end{center}
+As a general rule we need f+1 rounds.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/le/thm.png}
+\end{center}
+\section{Consensus in ES Systems (Paxos)}
+If we consider an asynchronous system composed by n processes, if f greater than 0 then consensus is unsolvable, the proof just shows that you always violate a safety or liveness property.\\\\
+So let’s see how to solve consensus in ES systems, we can do that via paxos.\\
+Paxos provides a viable solution to consensus in ES settings with crash failure:
+\begin{itemize}
+    \item 	Safety (validity + integrity + agreement) is always guaranteed
+    \item The algorithm is live (termination) only when the network behaves in a good way for long enough periods of time
+    \item We assume that a majority of correct processes and an ES system.
+\end{itemize}
+In the paxos algorithms we assign roles, roles aren’t exclusive  as a processes may have multiple roles and we may also set a limit or not for the minimum number of processes that are in a role. For paxos we have the following roles:
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/paxos roles.png}
+\end{center}
+The algorithm will work on any amount of failure on the proposers and at least 1 correct on the learner, the majority of correct process only applies to the acceptors\\\\
+A consensus protocol should choose a value that has been proposed and that has been chosen (the moment at which the algorithm chooses a value but has yet to be decided) and a process never learns that a value has been chosen unless it actually has been.
+Now the easiest way to solve consensus in ES is to have a single acceptor, we just propose a value, and accept it (This property is called P1: an acceptor accepts the first value it sees). But if our acceptor crashes, our algorithm wouldn’t work.
+When we work with multiple acceptors, we say that when a majority of acceptors received a value, only then it is chosen.\\\\
+Now if we were to try and run this algorithm when we accept a single value we would run into another problem, suppose each acceptor accepts a different value, then we would never come into a consensus. To actually fix this we need to accept more than one value and possibly change idea.\\\\
+To actually do this when we need to propose a value, we attach a random number to our message, and therefore start sending ($round\_number$, value) and to make paxos work, we need to have unique round numbers, so each process must use different round numbers. To do this we use modulo operator. 
+If at a certain time we create a majority on a certain value, and in the future we create another majority, the second majority must have the same value of the first. (This property is called P2).
 
+    
 
-
-
-
-
-
-
-
-
-
+To imply P2 we need P2a:
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/P2a.png}
+\end{center} 
+But by itself, what would happen if a proposal with value v is chosen while an acceptor c never saw it? A new proposer could wake up and propose a different value v', that c must accept due to P1.\\
+So we need P2b:
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/P2b.png}
+\end{center} 
+But how can we ensure P2b?
+The proposer need to ask the acceptors if they accepted a proposal, pick the value with the highest round number and take that value to be later sent.
+More formally, P2c: For any v and n, if a proposal with value v and round number n is issued, then there is a set S consisting of a majority of acceptors such that either:
+\begin{itemize}
+    \item No acceptor in S has accepted any proposal prior to n, or
+    \item v is the value of the highest-numbered proposal among all proposals round numbered less than n accept by the acceports in S
+\end{itemize}
+P2c can be maintained by asking to a proposer that want s to propose a value numbered n to learn the highest-numbered value (with number less than n, if any) that has been accepted or will be accepted by each acceptor in a majority.\\
+But there’s still a problem that needs to be fixed, suppose p3 prepares and a majority responds with bottom and therefore at round 3 he proposes value 0, but between round 0 and round 3, there’s a lot of time (an unbounded delay as it is ES) and in that time another process could propose another value.\\
+So when we prepared we send our round number, and the acceptor just replies with either the value it had before or a “promise’ where each other proposal with a round number less than ours will be discarded. When the majority of acceptors receive this proposal, we say that we have “killed” the round number before ours.\\
+Paxos is divided into 2 phases:
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p1.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p1-2.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p1-3.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p2-1.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p2-3.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/another-example.png}
+\end{center}
+For the message complexity we reason in terms of acceptors as N, we would need 3N as we need to propose, ack, decide, but that is the best case, in the worst case we cuould have an unbounded number of messages since we can have a circular situation.
 
 
 
