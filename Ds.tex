@@ -1021,16 +1021,80 @@ Paxos is divided into 2 phases:
     \includegraphics[scale=0.5]{img/consensus/paxos/another-example.png}
 \end{center}
 For the message complexity we reason in terms of acceptors as N, we would need 3N as we need to propose, ack, decide, but that is the best case, in the worst case we cuould have an unbounded number of messages since we can have a circular situation.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/p-alg.png}
+\end{center}
+We have the set A of acceptors, n is the cardinality of A and f is the failure bound, which is n-1/2
+In the initialization we have current round number (crnd) set to -1.
+When we propose, since paxos is a 1-shot algorithm, it’ll be triggered only once, we set to crnd to next round assigned to that proposer, we set cval to the value that has been proposed, P (the set of the responses for the acceptor) to null, and send a prepare message to all the Acceptors.
+When we receive a promise we check if its for the crnd and then put the Promise with vrnd and vval inside P.
+When the set of promises is geq than n - f (so a majority), we then scan the set of promises and get the one with the highest round number and assign it to j, we check if its geq to 0, if it isn’t we can just end accept to A, if it is geq to 0, we assign the value for that round to V and get the value for that round to cval, after that we send it to all acceptors A via an ACCEPT action. If we don’t get that a response for our ACCEPT we just set a timeout and then re-pick the highest round number.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/a-alg.png}
+\end{center}
+We have the set of Learnes L and rnd,vrnd,and vval to -1, vrnd and vval is the pair round and value that we accept.
+When the acceptor receives a prepare request along its round number, we check If prnd > rnd and put rnd = prnd, we check if its greater since we need to check if the proposal is old, and after that we send a promised that we don’t accept a round with lower number.
+When we get an accept message with a round number I and value v, we check if I is geq to rnd that we promised, after that we just put rnd, vrnd, to I and vvalue to v, finally we send a Learn message with pair I,v to the learners.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/l-alg.png}
+\end{center}
+The learner has a set V multiset to 0 (rnd,vaue pair), the difference between a set and multiset is that in a set each value is unique, while in a multiset we can repeat elements.\\\\
+When we receive a learn message, we just add it to the set
+When there exist a pair in V such that the cardinality of that value is a majority then v is chosen.
+In the best case we have a message delay of 3 messages.
 
+For the proof we’ll only do the agreement property. (A single value is chosen)\\
+If an acceptor accept a value, we say that ai voted that value for that round number.\\
+We’ll show the following\\
+If an acceptor a has voted for a value v at round I, then no value v’ different from v can be chosne in a previous round $j < I$  (This implies a single value v is chosen)\\
+The proof for the last statement is done by induction:\\
+If a voted for v at round r = I then, there is a proposer p that collected a set of acks S from a quorum Q of acceptors for its prepare(r=i). In round 0 the claim is correct since there is no round prior.\\
+Inductive hypothesis, we say that this is correct for r=1 to i-1\\
+Inductive step. Let us investigate round I, Let (r=j,v) be th vote for the highest round seen in the set S. \\
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/matrix-1.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/matrix-2.png}
+    \includegraphics[scale=0.5]{img/consensus/paxos/matrix-3.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/liveness.png}
+\end{center}
+How can we fix this? By assuming the system is ES.
+\begin{center}
+    \includegraphics[scale=0.5]{img/consensus/paxos/liveness-fix.png}
+\end{center}
 
-
-
-
-
-
-
-
-
+\section{Total Order/Atomic Broadcast}
+As usual we have the validity, integrity, agreement and order properties
+\begin{center}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/specs.png}
+\end{center}
+Remember that the uniform agreement implies that the messages sent by non correct processes is a subset of the messages sent by correct processes, while in NUA, the intersection between these two sets can be null.
+\begin{center}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/agreement.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/agreemenet-2.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/tob-interface.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/tob-gui.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/tob-alg.png}
+\end{center}
+In the init we have an unordered set where we put the messages that have yet to be ordered in the total order, in delivered we put the messages that have been delivered and therefore ordered, we have our round counter and a Boolean variable wait, which is used to wait for an instance to finish.\\\\
+When a process wants to broadcast something  we’ll trigger total order broadcast handler (tob), which itself triggered the reliable broadcast, we put the message in the unordered set for the message that is sending it with the pair (pid,mid), this is done for every process that wants to send a message, since our unordered set is not empty we start a consensus with the proposal of our unordered set and the consensus will then start, and then terminate (note if we have multiple consensus they can terminate at different times). When it terminates each process gets a decision event, it unpacks the value decided by the consensus, and then sends a tob. After that we add our values to delivered and remove it from unordered, get a new round and set wait for false.\\\\
+When we get a rb delivered event we check if the message has been delivered, if not then we add it to unordered.\\
+Talking about message complexity here is useless, as we can swap out consensus with multiple algorithms and the complexity is hidden by that.
+\begin{center}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/a2-proof.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/a-proof.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/nc-proof.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/to-proof.png}
+\end{center}
+\subsection{Uniform Total Order Broadcast}
+Lets do the uniform total broadcast, remember that in non uniform if the consensus instance is not uniform we may have 2 processes that decide differently if a process crashes.\\\\
+So we need new properties:
+\begin{center}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/utob-interface.png}
+    \includegraphics[scale=0.5]{img/Broadcast/atomic/utob-alg.png}
+\end{center}
+We can actually make the algorithm uniform without changing a line, know that the only way to have different ordering is if something happens differently during the sort. The only distance where a faulty process has a different delivered order from a correct process is when it dies, but even if it dies to the previous proofs, the faulty process (eg p2) has a delivered set that is a subset of the delivered set of a correct process p1, it’s actually a prefix. So as long as the consensus is uniform, we have no problems!
 
 
 
