@@ -1095,17 +1095,318 @@ So we need new properties:
     \includegraphics[scale=0.5]{img/Broadcast/atomic/utob-alg.png}
 \end{center}
 We can actually make the algorithm uniform without changing a line, know that the only way to have different ordering is if something happens differently during the sort. The only distance where a faulty process has a different delivered order from a correct process is when it dies, but even if it dies to the previous proofs, the faulty process (eg p2) has a delivered set that is a subset of the delivered set of a correct process p1, it’s actually a prefix. So as long as the consensus is uniform, we have no problems!
+\section{Software replication}
+\subsection{Software replication in synchronous systems}
+Suppose we have a server containing a object, suppose then, that the server dies, normally we would lose that object, but if we were able to replicate this object onto other servers, then as long as 1 server is alive, we would still have that object. In synchronous sytems we can build systems that tolerate f=k-1 failures where k is the number of servers.\\\\
+So the availability of our replica is $1 - p^n$ where p is the probability of failures, but we are simplifying this by making them independent, but normally if a server fails, one with the same specs would probably also fail, that’s why we need Diversity, where a set of replica is diverse if replica run on different hardware, different OS and different implementations of our object.\\\\
+We use the following syntax: L.Append(1) C1, which says client 1 wants to append 1 to L, we assume that the client does not invoke or issue an operation on the same object until the pending one completes\\\\
+Due to the fact that we have multiple clients talking to the same interface we need to implement consistency semantics, we have 3 main criterias: Linearizability, sequential consistency and causal consistency, but we will only see linearizability semantics.
 
+\includegraphics[scale=0.5]{img/software_replication/linearizability.png}
 
+If an object is linearizable, it is also atomic.
+We want to create a generic linearizable replicated object, by generic we mean that the algorithm is not specific for a certain object, 
+so it must work with whatever data structure we feed it. We can implement linearizability of generic object if the system of replicas behaves in a certain way, we need atomicity 
+(all replicas execute the same operation, including crashes), Ordering (if there is a certain order in a replica, then every other replicas follow that same order), Blocking operations 
+(if you are a client and issue a command, we do not see a response until the replica executes that command), if we have a system that implements these conditions, 
+then our objects are linearizable automatically. These conditions are sufficient, but not necessary, as some objects do not require them.\\\\
+To actually implement replications we have 2 ways:
+\begin{itemize}
+    \item \textbf{Active replication} :where we have a total order broadcast module on the client and replica, the client just sends the operation to the replicas and if there is a response the replicas just send it back. As long as the object is deterministic this way does not cause any problems, but this system does not scale as we have way too many tob to do.
+    \item \textbf{Primary Backup (Passive replication) }: where one of the replicas acts as a primary and the client communicates only with that one, only when the primary fails do we change who is the primary.
+\end{itemize}
+Primary backups work in synchronous and esync, but for now we’ll assume synch and the presence of P.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/primary-backup.png}
+\end{center}
+This one has no failures, and if there are no failures we have atomicity, we have ordering since the primary serialializes the operations, and we have blocking as each operation is blocked until the primary answers.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/primary-1.png}
+    \includegraphics[scale=0.5]{img/software_replication/primary-2.png}
+\end{center}
+Now the only thing that the primary has to do, is wait until the set containing acks and crashed is the set of all processes.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/difficult.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario-1.png}
+    \includegraphics[scale=0.5]{img/software_replication/sccenario-2.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario2-2.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario-3.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario-3-2.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario-3-3.png}
+\end{center}
+So for general objects each backup keeps a counter of the update seen this counter can only be different by 1.
+There is an algorithm but its not important (Hopefully).
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/scenario3-4.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario3-5.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario3-6.png}
+    \includegraphics[scale=0.5]{img/software_replication/scenario3-7.png}
+    \includegraphics[scale=0.5]{img/software_replication/pros.png}
+\end{center}
+\subsection{Software replication in ES systems: Raft}
+Raft is a system that replicates a replicated state machine in an ES system. It is a primary backup approach.\\\\
+The main problem that raft solves is the keeping of a replicated log (an append only list), we have clients that talk to a set of servers (more specifically a primary) which is called leader, the leader will run a consensus model integrated into the system and then appends it into the log, for now the commands will be just x86 assembly instructions. Therefore we’ll create a distributed system that is able to run a command on all machines. We start from a set of registers at the beginning, update them and then update their state, execute the command and so on.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/1.png}
+\end{center}
+As long as we have the log we can create a replicated state machine.\\\\
+The following are the components in raft:
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/2.png}
+\end{center}
+The normal operation happens when the leader is correct, as long as the leader is correct we are in normal operation, there is a problem though, when the leader dies we need to elect a new one but we need to keep consistency on our machines, but since we are in ES we don’t have a P FD, another module is needed to neutralize the leaders, as in ES we may think the leader is dead, but its still alive, we need a way to tell the old leader to surrender and give its powers to a new leader, due to this we also need the last module as some clients may differ in who they think is dead.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/3.png}
+\end{center}
+The follower just follow the leader’s commands, if the leader isnot active, after a certain timeout, someone will become a candidate, who will ask every other follower to vote for him, when we receive a majority of votes we become leaders, as if we have a majority there is no other candidate that can actually become a leader, therefore the number o failures mut be strictly less then n/2. Solving consensus is impossible without this (as we already know).\\\\
+If you are a leader and see a new leader has been elected (higher term) you MUST step down and become a follower, this may happen when we are correct if our channel is slow. A candidate will stops being a candidate if someone won the election.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/4.png}
+\end{center}
+The time in raft is divided in terms, a term is a slice of time where we have a reader we think is correct, each term is denoted an integer, the blue part in the election, is the actual election, after that the green term is when we are in a normal operation.\\\\
+Not in all terms do we have a normal operation, as you can see in term 3, this may happen if we don’t reach a majority (eg we only get 4 replies and they are split), if this happens we should do another election, for different terms we may have different leaders, but in a single term (in the green part) we only have a single leader. In our memory we also have a term counter, when we get a message with a higher term, we switch to it.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/5.png}
+\end{center}
+From now on we’ll talk about Remote Procedure Calls but we wont discuss them formally, when we get a RPC call with a certain method (eg add) with a certain input (x,y) we need to execute that command and respond with only the answer.\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/6.png}
+\end{center}
+When you are a follower you only expect a single command from the leader (append) periodically, the append RPC, our leader tells the follower to append x to the Log, this of course only happens when the client says so, if the client doesn’t say anything the Leader will still send append but with null, and we count that as an heartbeat.\\\\
+When a follower sees a request, it executes a request and starts a timeout, when this timeout timeouts, the follower increases the term and becomes a candidate, it votes for itself and sends a request RPC to all other servers, after that we have 3 scenarios.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/7.png}
+\end{center}
+The term counter is appended to every single message. At the start everyone will vote for the first candidate that contacts them. When you reach a majority, you as a candidate will become a leader and serve requests to the client.\\\\
+The third case is the split election,(suppose 4 processes, p1 dies and p2 and p4 try to elect themselves, p2 get p2 and p3 and p4 gets just p4) but just starting an election will put you in a locked state again,to prevent this the timeout is random for each candidate, so that at least one of them will win the “race” and get all the necessary votes.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/8.png}
+\end{center}
+The liveness is guaranteed by this random backoff time, but to work the system must be ES, as we need a synchrony period for this to actually work.\\\\
+If we are in an asynchrony period we might get the split vote as the asynchrony might lead us to the same waiting period, we can get a split vote in a synchrony period also at the beginning, but the split vote will be resolved with probability I.\\\\
+This asynchrony countermeasure is similar to paxos (remember that we kill other runs, remember the FLDP theorem).\\\\
+\textbf{What is the log?}
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/9.png}
+\end{center}
+The Log is an append only list indexed with 2 elements, the term and the command.\\\\
+When the leader gets a command, it first appends to its own log, but it does not yet reply with the result, first it must make sure that the command is accepted by the machine (making sure that even if it dies we still have it), it sends the command to all the replicas and waits for the acks, but we don’t have a P FD! Therefore it will broadcast the command and waits for a majority of acks and only then does it respond with the result to the client. We say that an entry is committed only when it is in a majority of servers. But this strategy may leave processes behind (they may be slow) in that case the leader will broadcast the command and only some get it, but we just don’t care about the discrepancy.\\\\
+This double majority pattern was also seen in Paxos (Prepare and Propose).\\\\
+If the leader stays alive we have a message delay of 2N (Broadcast and Acks), if it dies we must account for the election, when the system becomes async we have an unbounded
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/10.png}
+\end{center}
+This is what happens in the normal operations\\\\
+When we get slow followers, we just continue to send the RPC call even after receiving new commands (we’ll have a set containing who has what)\\\\
+But when the leader changes we need an agreement on the log, in raft there is a property where if for a certain index (eg 5) we find two replicas for term 3 this means that the command are the same, but if for a certain replica we find a command from term 3 and term 4,
+\begin{center}
+    \includegraphics[scale=0.8]{img/software_replication/raft/11.png}
+\end{center}
+This must mean that the entry that was on the previous term (3,div) was not committed, therefore we need a way to modify the log, and keep consistency.\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/12.png}
+\end{center}
+What happens when the append rpc is executed is a bit more complex to solve this problem, we can append only when the entry before was the same for the leaer (the leader sends its previous entry along with the new entry, if the one before is the same as the one the leader has then we can append),so we need a mechanism to actually correct when we have a mismatch and overwrite the log. This is dangerous as we are actually violating the safety, as once we respond to the client we are committing an entry and cannot roll back (imagine a bank doing a transaction and after that it rolls back). So we need to be careful to not overwrite a committed entry.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/13.png}
+\end{center}
+When we elect a leader we must make sure that the followers follow the leader’s entries, but we must make sure that we don’t elect a leader that overwrites committed changes.\\\\
+We might have a messy log as in the figure above, where we have entry 1 and entry 5 (as it is a majority).\\\\
+If we were to elect 4 after term 3 we would overwrite committed entries, and of course we wouldn’t want that, therefore when we elect a leader we also need to pick one that has the most committed entries. (so in our case s1 and s3)\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/14.png}
+\end{center}
+So we need to change the definition of committed and election.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/15.png}
+\end{center}
+Suppose we are in the situation above, we can only tolerate one failure, suppose the third process becomes isolated (slow channel), we will start an election between R0 and R1, we cant know if last entry has been committed as in we don’t have (2,5) in the remaining majority.\\\\
+So each process must compute the number of entries in the last term, and we vote only for the one with the higher term or if they have the same term the one with the higher number of entries I that particular term.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/16.png}
+    \includegraphics[scale=0.5]{img/software_replication/raft/17.png}
+\end{center}
+This exception (case 2) might happen, (imagine s5 got elected and then later isolated), s1 needs to make sure that everyone is consistent and sends 4 to everyone, s1 will push entry 3 to s3 and it will accept the entry, s1,3 will be on a majority of servers but it is not committed, as if s1,s2 die, s5 will win due to the higher term, so this case can happen when we have someone distributing old entries, this action only becomes safe if a leader pushes a new action for the same term.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/18.png}
+\end{center}
+So an entry is committed if we are in the same term, or if we push an entry of an old term followed by an entry by the current term.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/19.png}
+\end{center}
+D can get the vote from everyone, c can get from everyone but d, a can get b e and f, and 0 can get a,b etc etc.\\\\
+Every entry is committed but 9 onwards.\\\\
+Suppose we run the election and 0 is the winner, it must repair the logs of the follower
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/20.png}
+\end{center}
+The leader will go backwards until the timeline matches, and tells the follower to overwrite or append an entry after that.
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/21.png}
+    \includegraphics[scale=0.5]{img/software_replication/raft/22.png}
+    \includegraphics[scale=0.5]{img/software_replication/raft/23.png}
+\end{center}
+The contacts from the client are unique (utilizing timestamps).
+\begin{center}
+    \includegraphics[scale=0.5]{img/software_replication/raft/24.png}
+\end{center}
+\section{Byzantine Failures}
+We will see only 2 types of paradigms for byzantine failures: broadcasts and consensus (hopefully).\\\\
+We know that in an execution we may have a crash stop failure event (the process stops executing), in the byzantine failure, an event happens on a process and that process can do anything, but he doesn’t follow the algorithm anymore. They behave in an arbitrary way. This means that they may even seem that they are actually following the algorithm, but at some random point (even a critical one) they may start sending abnormal messages.\\\\
+Remember that if an algorithm is able to handle a byzantine failures then it can tolerate the same N crash stop failures.\\\\
+If you try to enumerate what a byzantine process does, you’ll fail, as  they are infinite, therefore we need to prove that given any action our algorithm does not fail, byzantine process also control asynchrony, we also assume that there may be a malicious third party that controls all byzantine process and he may also control the scheduler, but the fairness of the scheduler is kept. So it can control, the delay of the channel, the messages and the scheduler, provided the scheduler keeps  that type of synchrony.\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/1.png}
+\end{center}
+Let us imagine we have this run for a hierarchical consensus, if we do not prevent the byzantine to prevent fake messages (e.g. saying p1 sent a message) then the byzantine process colluding with the scheduler can isolate a process!
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/2.png}
+\end{center}
+Therefore we need a way to authenticate messages.\\\\
+How do we do this? With cryptography (god why)
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/3.png}
+    \includegraphics[scale=0.5]{img/byzantine/4.png}
+\end{center}
+We will only use MACs and Signatures, we wont have the code itself as its complicated, and we’ll use an oracle abstraction to actually utilize them. The oracle is a process/library inside every process, it exposes two functions, one to create the Mac and one to verify it.\\\\
+Public signatures also use the oracle perspective, it is stronger than macs, as it proves if you have received a certain signature from a certain person.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/5.png}
+\end{center}
+The Al2 is a bit different as it contains “correct”, as a byzantine process can deliver an infinite number of messages.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/6.png}
+\end{center}
+When someone wants to send a message, we first authenticate the message via its oracle and only after that it will send a pair containing the message and the special object, since the link is stubborn it will get an infinite number of messages.\\\\
+When a process finally gets that message, it firsts checks if the message with that authentication code is correct and that he message has yet to be delivered, if both are true, it will add that message to delivered and only then does it deliver the message\\\\
+In the AL3 property we specify that the process must be correct, if P2 (correct) gets a message from P4 (byz), another byzantine process P3, may just ask P4 to get its MAC and fake a message from P4 to P2.\\\\
+There are some properties that are meaningful in byzantine failures, for example UC4:
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/7.png}    
+\end{center}
+But this property cannot be implemented as a byzantine process can choose to do whatever he wants whenever he wants, so it may choose to decide differently, therefore no uniform property holds when byzantines are used.\\\\
+FDs for byzantines exist, but we wont see them, the professor doesn’t like them as a smart enough byzantine can just evade them.
+\subsection{Byzantine Broadcast}
+The problem with crash-failures in broadcast was when a process sending a broadcast dies in the for when sending the messages, therefore we introduced the reliable broadcast with the all or nothing primitive, but a byzantine sender can send different messages to different people while not crashing, this makes the messages inconsistent. Therefore we need a way to have the all or nothing semantic while keeping the run consistent.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/8.png}
 
+\end{center}
+The consistent broadcast makes the byzantine failure behave as a crash-stop.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/9.png}
+\end{center}
+The request executed by only process s is important, we need to specify that the instance of the algorithm who is sending that broadcast, the algorithm is one shot, as if a process wants to broadcast again we need a new instance of the algorithm.\\\\
+BCB1 tells us that as long as the sender is not byzantine then even if the byzantine tries to destroy the algorithm it cant.\\\\
+BCB3 is the authentication of the channel.\\\\
+BCB4 just means that the messages delivered to correct processes must be the same.\\\\
+Let’s try building the algorithm:\\\\
+If the sender is byzantine, we may have different messages to different correct processes, a way to solve this is to make every process that receives a message to broadcast it again (echo phase)
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/10.png}
 
+\end{center}
+At the point just after p4 received the m’ message, p4 does not know WHO is the byzantine, for example suppose p1 was correct and p3 was byz and injecting a fake message. We continue doing echo messages and we start populating an array with N messages (each process has this array). But a single echo is not enough, if we have 2 echoes it still isn’t enough
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/11.png}
+    \includegraphics[scale=0.5]{img/byzantine/12.png}
+    \includegraphics[scale=0.5]{img/byzantine/13.png}
+\end{center}
+Why cant we use 4 echoes?\\\\
+Because we would break the validity property, as the byzantine process may just not send its echo the 4th time or echoes a different a message, even if the sender is correct, non one would deliver.\\\\
+Lets generalize the number of echoes needed, echoes are just votes for a certain message, a byz can give different votes but an honest process gives the same vote to everyone.\\\\
+Suppose P and P’ are two different processes and we want them to deliver the same message, let us call Vm the votes received by P (identity of the voters), we want to create the algorithm where Vm’ after it has reached a certain cadinality, Vm’ = Vm, so the message is the same. We want to reach the condition where the cardinality of the intersection between Vm and $Vm' = f  + 1$, as that means that the same honest process voted I both set, this implies m = m’. If the sum of the cardinalities is N, can we say something about the intersection? No, as we can have 5 people in the first and 5 people in the second and there is no intersection. If the sum is N + 1 then we have atleast a process in both sets. So we want the cardinality to be N + f + 1. So our threshold t must be such that t + t geq N + f + 1. So the threshold must be $t \geq \frac{N+f+1}{2}$ such that the intersection must have atleast one honest process.\\\\
+So t must be GREATER (not geq) to (N+f)/2\\\\
+This quantity is called byzantine quorum.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/14.png}
+\end{center}
+Initially we have a sentecho that will be set to true after we start doing the echo, a delivered viable used to remember to not delivered twice, we don’t use a set as we the algorithm is one shot, so we don’t need to remember the past, and a set of echos set to bottom.\\\\
+When the sender does a broadcast, it triggers an authenticated link send to all processes in the system. WE are using the authenticated link, therefore if byzantine tries to do stuff before us, he will fail and cannot replace a correct sender in the first face. This handler is triggered at most once (sender s).\\\\
+When we get a send message event (just before the echo) we check if the indetity of the process is s, since a byzantine can fake messages and try to be the sender, and we check if sentecho = False (so we only do it once), after that we put sentecho to true, and start sending an echo to everyone.\\\\
+When we receive an echo from a proess p2, we first check if the location is null, if its different than null we write it, if we didn’t have it the byzantine process could send multiple echo messages.\\\\
+When we want to deliver a message we check if a non null message exists and tha the number of echoes for that message is greater than the threshold and we have yet to deliver it, we set delivered to true and deliver the message to the upper layer.\\\\
+Lets see the proof:
+For validity: if the sender is correct at least $n-f$ processes do the echo (every correct) of m. In order for others to deliver m we need $N-f > (N+f)/2$, that is $N/2 > f + f/2$, otherwise known as $N > 3f$ (assumption)\\\\
+No duplication comes from the delivered variable and integrity come from the auth. Channel. As it only do the echo from a process that actually send that message.\\\\
+For consistency
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/15.png}
+    \includegraphics[scale=0.5]{img/byzantine/16.png}
+    \includegraphics[scale=0.5]{img/byzantine/17.png}
+\end{center}
+We have at most $n^2$ messages, but remember that a byzantine can send an infinite number of messages so the measure of complexity only talks about the messages sent by the correct process, and a message delay of 2 steps.
+\subsection{Byzantine Reliable Broadcast}
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/1.png}
+\end{center}
+The BRB always has a single sender and is one shot, same as before.\\\\
+Our job now is to add to the previous algorithm a third phase, such that the correct processes behave in a way that is total (all or nothing). How can we do this and make them agree?\\\\
+Instead of delivering the message immediately upon reaching the quorum threshold, we need to broadcast a message where we say we are ready to send a message.\\\\
+Let’s say that we see 1 ready message on another process, it could’ve been sent by the byzantine process, so we need to decide a threshold for the number of ready message to deliver. Let us reason when the sender of the broadcast is correct, in the previous algorithm if the sender is correct, will just deliver at the end of the echo phase. Normally we can only see a maximum of N – f ready messages, as we literally cant have more than that, therefore the threshold must be <= N- f, else we would wait forever.\\\\
+This algorithm is special because we have a 2 threshold behavior.\\\\
+Lets reason again, is it possible to run the previous algorithm with the ready, at some point we have 2 correct process, one sends the ready for the correct message, and one for the byz message? No! It would never reach the threshold, as we use byzantine quorums.\\\\
+From this perspective if we see a ready message from a correct process, we can start amplifying that message and sending a ready message for that message. The problem of course is that we don’t know if the message is from a correct, there is a case where if we see a certain number of message (f + 1) we are sure that the sender is correct.\\\\
+Why do we need the amplification?
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/2.png}
+\end{center}
+Suppose we are in this situation, where p3 does not receive a number of black messages equal to 3 and therefore does not reach the reshold, and the byzantine sends the ready message to p2 and p4, but p2 and p4 can deliver to the upper layer, if we didn’t have amplification the byzantine wouldn’t deliver and p3 does not reach the reshold. If we amplify p3 would receive a third message to himself, and therefore p3 would deliver, and totality is achieved.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/3.png}
+\end{center}
+The only thing different from the previous init is that we have a ready which acts the same as the echos set.\\\\
+After that the algorithm is modified in the right column at trigger send ready.\\\\
+When we get a ready we just add that ready if we had bottom before to that process\\\\
+If there exist a non null message such that the number of readies is greater then f, and if we didn’t have sentready to true, we set sentready to true, and then broadcast the ready message to everyone\\\\
+When we have a non null message such that the number of readys for that message is greater than 2f ($or N-f$) and we didn’t deliver yet, we set delivered to true and triggered a brb delivery to the upper layer.\\\\
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/4.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/5.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/6.png}
+\end{center}
+The message complexity is infinity if we count he byzantine, else we only count the correct.\\\\
+We have $O(N^2)$ and the time complexity is 3.\\\\
+The resilience of this algorithm is the same as the previous so less than 1/3rd
+\subsection{Signatures}
+If we use signatures and the system is synchronous the resilience is $f < N$
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/7.png}
+\end{center}
+In the algorithm at round 1 the senders sends a message and signature to everyone, if the sender is correct it will only send 1, if the sender was correct we could deliver immediately, but we don’t know if he was correct therefore at the second round we need to ECHO, but before that we need to check if the signature for that message is valid, if it is, we send that message to everyone. If the sender was byzantine then we could get some that broadcast the correct message and some that don’t, and at the end of the round we would have two messages on each process. In this case we discard everything and don’t deliver anything.\\\\
+If the sender was correct, and one of the processes was byzantine, the worst that the byzantine could do is create and sign another message, but it would be different from the initial signature, and therefore we discard the fake message.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/8.png}
+\end{center}
 
-
-
-
-
-
-
-
+\subsection{Byzantine Agreement}
+We will only do the byzantine agreement in the synchronous models. Remember that in async systems we cant have consensus, even with just crash failures.\\\\
+We need to change a property, the Validity of consensus. As if we had byzantine properties this validity would be called any input, as a byzantine could propose any value. Therefore we need correct-input validity which is the same but the process that proposes must be correct
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/9.png}
+\end{center}
+But again, the byzantine could follow the protocol, but still give an incorrect value, therefore we need all-same validity (weak validity)
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/10.png}
+\end{center}
+For the Byzantine agreement we will see that it is impossible to solve with when n=3f without signatures, and we will show the king algorithm solves BA as long as n=3f+1\\\\
+From now on we assume MAC but no signatures.
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/11.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/13.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/14.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/14-2.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/15.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/16.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/17.png}
+\end{center}
+\begin{center}
+    \includegraphics[scale=0.5]{img/byzantine/brb/18.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/19.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/20.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/21.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/22.png}
+    \includegraphics[scale=0.5]{img/byzantine/brb/23.png}
+\end{center}
 
 \end{document}
